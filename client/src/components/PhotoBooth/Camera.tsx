@@ -13,6 +13,9 @@ interface CameraProps {
 
 const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
   const webcamRef = useRef<Webcam>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null); // For real-time processing
+  const animationRef = useRef<number>(0);
+  
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
   const [isCountingDown, setIsCountingDown] = useState(false);
   const [countdown, setCountdown] = useState(3);
@@ -23,23 +26,12 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
   const [showFaceOverlay, setShowFaceOverlay] = useState(true);
   const [showLandmarks, setShowLandmarks] = useState(true);
   const [showBoundingBox, setShowBoundingBox] = useState(true);
+  
+  // New state for real-time enhancement
+  const [enableRealTimeEnhancement, setEnableRealTimeEnhancement] = useState(false);
 
   const getPanelCount = () => {
     return parseInt(stripType.split(' ')[0]) || 4;
-  };
-
-  const getFilterStyle = () => {
-    const filterMap: { [key: string]: string } = {
-      'grayscale': 'grayscale(100%)',
-      'sepia': 'sepia(100%)',
-      'vintage': 'sepia(50%) contrast(120%) brightness(110%)',
-      'warm': 'brightness(110%) saturate(150%) hue-rotate(15deg)',
-      'cool': 'brightness(110%) saturate(80%) hue-rotate(-15deg)',
-      'vivid': 'saturate(150%) contrast(120%)',
-    };
-
-    const appliedFilters = filters.map(filter => filterMap[filter] || '').filter(Boolean);
-    return appliedFilters.length > 0 ? appliedFilters.join(' ') : 'none';
   };
 
   const startCountdown = () => {
@@ -59,66 +51,91 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
     }, 1000);
   };
 
+  // NEW: Real-time video processing
+  const processVideoFrame = () => {
+    if (!webcamRef.current?.video || !canvasRef.current) return;
+    
+    const video = webcamRef.current.video;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d')!;
+    
+    // Set canvas size to match video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Draw current video frame to canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Apply real-time face enhancement if enabled and faces detected
+    if (enableRealTimeEnhancement && faces.length > 0) {
+      const faceRegions = faces.map(face => ({
+        x: face.detection.box.x,
+        y: face.detection.box.y,
+        width: face.detection.box.width,
+        height: face.detection.box.height
+      }));
+      
+      // Apply enhancements
+      FaceEnhancementService.enhanceFaceLighting(canvas, faceRegions);
+      FaceEnhancementService.applySkinSmoothing(canvas, faceRegions, 0.3);
+    }
+    
+    // Apply other filters
+    if (filters.length > 0) {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      
+      for (const filter of filters) {
+        applyPixelFilter(data, filter);
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+    }
+    
+    // Continue processing next frame
+    animationRef.current = requestAnimationFrame(processVideoFrame);
+  };
+
+  // Start/stop real-time processing
+  useEffect(() => {
+    if (enableRealTimeEnhancement || filters.length > 0) {
+      animationRef.current = requestAnimationFrame(processVideoFrame);
+    } else {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    }
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [enableRealTimeEnhancement, filters, faces]);
+
+  // Updated takePhoto to capture from enhanced canvas
   const takePhoto = () => {
     setIsCountingDown(false);
     
-    if (webcamRef.current) {
-      const imageSrc = webcamRef.current.getScreenshot();
-      if (imageSrc) {
-        if (filters.length > 0) {
-          applyFiltersToImage(imageSrc).then((filteredImage) => {
-            setCurrentPhotoJustTaken(filteredImage);
-            setCapturedImages(prev => [...prev, filteredImage]);
-            setShowPhotoOptions(true);
-          });
-        } else {
-          setCurrentPhotoJustTaken(imageSrc);
-          setCapturedImages(prev => [...prev, imageSrc]);
-          setShowPhotoOptions(true);
-        }
+    let imageSrc: string;
+    
+    // If real-time enhancement is on, capture from the processed canvas
+    if ((enableRealTimeEnhancement && faces.length > 0) || filters.length > 0) {
+      if (canvasRef.current) {
+        imageSrc = canvasRef.current.toDataURL('image/jpeg', 0.9);
+      } else {
+        imageSrc = webcamRef.current?.getScreenshot() || '';
       }
+    } else {
+      // Capture directly from webcam
+      imageSrc = webcamRef.current?.getScreenshot() || '';
     }
-  };
-
-  const applyFiltersToImage = (imageSrc: string): Promise<string> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-      const img = new Image();
-      
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        
-        // Apply face enhancement if faces are detected
-        if (faces.length > 0) {
-          const faceRegions = faces.map(face => ({
-            x: face.detection.box.x * (canvas.width / (webcamRef.current?.video?.videoWidth || 1)),
-            y: face.detection.box.y * (canvas.height / (webcamRef.current?.video?.videoHeight || 1)),
-            width: face.detection.box.width * (canvas.width / (webcamRef.current?.video?.videoWidth || 1)),
-            height: face.detection.box.height * (canvas.height / (webcamRef.current?.video?.videoHeight || 1))
-          }));
-          
-          // Apply face enhancements
-          FaceEnhancementService.enhanceFaceLighting(canvas, faceRegions);
-          FaceEnhancementService.applySkinSmoothing(canvas, faceRegions, 0.4);
-        }
-        
-        // Apply other filters...
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        
-        for (const filter of filters) {
-          applyPixelFilter(data, filter);
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
-      };
-      
-      img.src = imageSrc;
-    });
+    
+    if (imageSrc) {
+      setCurrentPhotoJustTaken(imageSrc);
+      setCapturedImages(prev => [...prev, imageSrc]);
+      setShowPhotoOptions(true);
+    }
   };
 
   const applyPixelFilter = (data: Uint8ClampedArray, filter: string) => {
@@ -235,6 +252,28 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
         Take Your Photos ({capturedImages.length}/{getPanelCount()})
       </h2>
       
+      {/* Face Enhancement Controls */}
+      <div className="bg-purple-50 p-3 rounded-lg">
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={enableRealTimeEnhancement}
+              onChange={(e) => setEnableRealTimeEnhancement(e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-purple-800 font-medium">
+              Real-time Face Enhancement
+            </span>
+          </label>
+          {enableRealTimeEnhancement && (
+            <span className="text-purple-600 text-sm">
+              ✨ Live skin smoothing & lighting enhancement
+            </span>
+          )}
+        </div>
+      </div>
+      
       {filters.length > 0 && (
         <div className="bg-blue-50 p-3 rounded-lg">
           <p className="text-blue-800 font-medium">
@@ -287,14 +326,33 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
       )}
       
       <div className="relative">
+        {/* Original webcam - hidden when processing is active */}
         <Webcam
           ref={webcamRef}
           audio={false}
           screenshotFormat="image/jpeg"
-          className="w-full rounded-lg max-w-md mx-auto"
-          style={{ filter: getFilterStyle() }}
+          className={`w-full rounded-lg max-w-md mx-auto ${
+            (enableRealTimeEnhancement && faces.length > 0) || filters.length > 0 
+              ? 'hidden' 
+              : ''
+          }`}
         />
         
+        {/* Enhanced canvas - shown when processing is active */}
+        <canvas
+          ref={canvasRef}
+          className={`w-full rounded-lg max-w-md mx-auto ${
+            (enableRealTimeEnhancement && faces.length > 0) || filters.length > 0 
+              ? '' 
+              : 'hidden'
+          }`}
+          style={{
+            maxWidth: '28rem', // Match webcam max-width
+            height: 'auto'
+          }}
+        />
+        
+        {/* Face overlay - position over whichever is visible */}
         {showFaceOverlay && faces.length > 0 && webcamRef.current?.video && (
           <FaceOverlay
             faces={faces}
@@ -315,6 +373,13 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
           </div>
         )}
       </div>
+
+      {/* Performance indicator */}
+      {enableRealTimeEnhancement && (
+        <div className="text-center text-sm text-gray-600">
+          🎬 Real-time processing active - {faces.length} face{faces.length !== 1 ? 's' : ''} enhanced
+        </div>
+      )}
 
       <div className="flex justify-center space-x-4">
         {capturedImages.length === 0 && !isCountingDown && !showPhotoOptions && (

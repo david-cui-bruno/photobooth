@@ -189,4 +189,71 @@ export class FaceEnhancementService {
       b: b / totalWeight
     };
   }
+  
+  // Add performance optimization for real-time processing
+  static applyRealTimeSkinSmoothing(
+    canvas: HTMLCanvasElement, 
+    faceRegions: FaceRegion[], 
+    intensity: number = 0.2 // Lower intensity for real-time
+  ): void {
+    const ctx = canvas.getContext('2d')!;
+    
+    faceRegions.forEach(face => {
+      // Skip very small faces to improve performance
+      if (face.width < 50 || face.height < 50) return;
+      
+      const faceImageData = ctx.getImageData(face.x, face.y, face.width, face.height);
+      const smoothedData = this.fastSkinSmooth(faceImageData, intensity);
+      
+      ctx.putImageData(smoothedData, face.x, face.y);
+    });
+  }
+  
+  // Faster skin smoothing for real-time use
+  private static fastSkinSmooth(imageData: ImageData, intensity: number): ImageData {
+    const data = imageData.data;
+    const width = imageData.width;
+    const height = imageData.height;
+    const smoothedData = new Uint8ClampedArray(data);
+    
+    // Process every 2nd pixel for speed (still looks good)
+    for (let y = 1; y < height - 1; y += 2) {
+      for (let x = 1; x < width - 1; x += 2) {
+        const idx = (y * width + x) * 4;
+        
+        if (this.isSkinPixel(data, idx, width)) {
+          // Simple 3x3 average for speed
+          const smoothed = this.fastSmooth(data, x, y, width);
+          
+          smoothedData[idx] = data[idx] * (1 - intensity) + smoothed.r * intensity;
+          smoothedData[idx + 1] = data[idx + 1] * (1 - intensity) + smoothed.g * intensity;
+          smoothedData[idx + 2] = data[idx + 2] * (1 - intensity) + smoothed.b * intensity;
+        }
+      }
+    }
+    
+    return new ImageData(smoothedData, width, height);
+  }
+  
+  private static fastSmooth(
+    data: Uint8ClampedArray, 
+    x: number, 
+    y: number, 
+    width: number
+  ): { r: number; g: number; b: number } {
+    // Simple 3x3 average
+    let r = 0, g = 0, b = 0, count = 0;
+    
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const idx = ((y + dy) * width + (x + dx)) * 4;
+        r += data[idx];
+        g += data[idx + 1];
+        b += data[idx + 2];
+        count++;
+      }
+    }
+    
+    return { r: r / count, g: g / count, b: b / count };
+  }
 }
