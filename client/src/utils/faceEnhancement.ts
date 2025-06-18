@@ -33,10 +33,29 @@ export class FaceEnhancementService {
     const ctx = canvas.getContext('2d')!;
     
     faceRegions.forEach(face => {
-      const faceImageData = ctx.getImageData(face.x, face.y, face.width, face.height);
-      const enhancedData = this.improveLighting(faceImageData);
+      const padding = 15;
+      const expandedFace = {
+        x: Math.max(0, face.x - padding),
+        y: Math.max(0, face.y - padding),
+        width: Math.min(canvas.width - face.x + padding, face.width + padding * 2),
+        height: Math.min(canvas.height - face.y + padding, face.height + padding * 2)
+      };
       
-      ctx.putImageData(enhancedData, face.x, face.y);
+      const faceImageData = ctx.getImageData(
+        expandedFace.x, 
+        expandedFace.y, 
+        expandedFace.width, 
+        expandedFace.height
+      );
+      
+      const enhancedData = this.improveLightingWithBlending(
+        faceImageData,
+        face,
+        expandedFace,
+        padding
+      );
+      
+      ctx.putImageData(enhancedData, expandedFace.x, expandedFace.y);
     });
   }
   
@@ -68,42 +87,6 @@ export class FaceEnhancementService {
     return new ImageData(smoothedData, width, height);
   }
   
-  // Improve face lighting - brighten shadows, enhance contrast
-  private static improveLighting(imageData: ImageData): ImageData {
-    const data = imageData.data;
-    const enhancedData = new Uint8ClampedArray(data);
-    
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      
-      // Calculate luminance
-      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-      
-      // Brighten dark areas more than bright areas (shadow lifting)
-      const shadowLift = luminance < 128 ? (128 - luminance) / 128 * 0.3 : 0;
-      const brightnessFactor = 1.0 + shadowLift + 0.1; // Base 10% brightness boost
-      
-      // Enhance contrast slightly
-      const contrastFactor = 1.15;
-      const midpoint = 128;
-      
-      // Apply lighting enhancement
-      enhancedData[i] = Math.min(255, Math.max(0, 
-        (r - midpoint) * contrastFactor + midpoint * brightnessFactor
-      ));
-      enhancedData[i + 1] = Math.min(255, Math.max(0, 
-        (g - midpoint) * contrastFactor + midpoint * brightnessFactor
-      ));
-      enhancedData[i + 2] = Math.min(255, Math.max(0, 
-        (b - midpoint) * contrastFactor + midpoint * brightnessFactor
-      ));
-      enhancedData[i + 3] = data[i + 3]; // Keep alpha unchanged
-    }
-    
-    return new ImageData(enhancedData, imageData.width, imageData.height);
-  }
   
   // Simple skin detection based on color ranges
   private static isSkinPixel(data: Uint8ClampedArray, idx: number, _width: number): boolean {
@@ -194,46 +177,41 @@ export class FaceEnhancementService {
   static applyRealTimeSkinSmoothing(
     canvas: HTMLCanvasElement, 
     faceRegions: FaceRegion[], 
-    intensity: number = 0.2 // Lower intensity for real-time
+    intensity: number = 0.2
   ): void {
     const ctx = canvas.getContext('2d')!;
     
     faceRegions.forEach(face => {
-      // Skip very small faces to improve performance
       if (face.width < 50 || face.height < 50) return;
       
-      const faceImageData = ctx.getImageData(face.x, face.y, face.width, face.height);
-      const smoothedData = this.fastSkinSmooth(faceImageData, intensity);
+      // Expand region with padding for smooth blending
+      const padding = 20;
+      const expandedFace = {
+        x: Math.max(0, face.x - padding),
+        y: Math.max(0, face.y - padding),
+        width: Math.min(canvas.width - face.x + padding, face.width + padding * 2),
+        height: Math.min(canvas.height - face.y + padding, face.height + padding * 2)
+      };
       
-      ctx.putImageData(smoothedData, face.x, face.y);
+      const faceImageData = ctx.getImageData(
+        expandedFace.x, 
+        expandedFace.y, 
+        expandedFace.width, 
+        expandedFace.height
+      );
+      
+      const smoothedData = this.fastSkinSmoothWithBlending(
+        faceImageData, 
+        intensity,
+        face,
+        expandedFace,
+        padding
+      );
+      
+      ctx.putImageData(smoothedData, expandedFace.x, expandedFace.y);
     });
   }
   
-  // Faster skin smoothing for real-time use
-  private static fastSkinSmooth(imageData: ImageData, intensity: number): ImageData {
-    const data = imageData.data;
-    const width = imageData.width;
-    const height = imageData.height;
-    const smoothedData = new Uint8ClampedArray(data);
-    
-    // Process every 2nd pixel for speed (still looks good)
-    for (let y = 1; y < height - 1; y += 2) {
-      for (let x = 1; x < width - 1; x += 2) {
-        const idx = (y * width + x) * 4;
-        
-        if (this.isSkinPixel(data, idx, width)) {
-          // Simple 3x3 average for speed
-          const smoothed = this.fastSmooth(data, x, y, width);
-          
-          smoothedData[idx] = data[idx] * (1 - intensity) + smoothed.r * intensity;
-          smoothedData[idx + 1] = data[idx + 1] * (1 - intensity) + smoothed.g * intensity;
-          smoothedData[idx + 2] = data[idx + 2] * (1 - intensity) + smoothed.b * intensity;
-        }
-      }
-    }
-    
-    return new ImageData(smoothedData, width, height);
-  }
   
   private static fastSmooth(
     data: Uint8ClampedArray, 
@@ -255,5 +233,142 @@ export class FaceEnhancementService {
     }
     
     return { r: r / count, g: g / count, b: b / count };
+  }
+  
+  // Skin smoothing with smooth edge blending
+  private static fastSkinSmoothWithBlending(
+    imageData: ImageData, 
+    intensity: number,
+    originalFace: FaceRegion,
+    expandedFace: FaceRegion,
+    padding: number
+  ): ImageData {
+    const data = imageData.data;
+    const width = imageData.width;
+    const height = imageData.height;
+    const smoothedData = new Uint8ClampedArray(data);
+    
+    for (let y = 1; y < height - 1; y += 2) {
+      for (let x = 1; x < width - 1; x += 2) {
+        const idx = (y * width + x) * 4;
+        
+        if (this.isSkinPixel(data, idx, width)) {
+          // Calculate distance from face center for blending
+          const absoluteX = expandedFace.x + x;
+          const absoluteY = expandedFace.y + y;
+          
+          const blendFactor = this.calculateBlendFactor(
+            absoluteX, 
+            absoluteY, 
+            originalFace, 
+            padding
+          );
+          
+          const effectiveIntensity = intensity * blendFactor;
+          
+          if (effectiveIntensity > 0.01) { // Only process if effect is meaningful
+            const smoothed = this.fastSmooth(data, x, y, width);
+            
+            smoothedData[idx] = data[idx] * (1 - effectiveIntensity) + smoothed.r * effectiveIntensity;
+            smoothedData[idx + 1] = data[idx + 1] * (1 - effectiveIntensity) + smoothed.g * effectiveIntensity;
+            smoothedData[idx + 2] = data[idx + 2] * (1 - effectiveIntensity) + smoothed.b * effectiveIntensity;
+          }
+        }
+      }
+    }
+    
+    return new ImageData(smoothedData, width, height);
+  }
+  
+  // Lighting enhancement with smooth blending
+  private static improveLightingWithBlending(
+    imageData: ImageData,
+    originalFace: FaceRegion,
+    expandedFace: FaceRegion,
+    padding: number
+  ): ImageData {
+    const data = imageData.data;
+    const width = imageData.width;
+    const enhancedData = new Uint8ClampedArray(data);
+    
+    for (let i = 0; i < data.length; i += 4) {
+      const pixelIndex = i / 4;
+      const x = pixelIndex % width;
+      const y = Math.floor(pixelIndex / width);
+      
+      const absoluteX = expandedFace.x + x;
+      const absoluteY = expandedFace.y + y;
+      
+      const blendFactor = this.calculateBlendFactor(
+        absoluteX, 
+        absoluteY, 
+        originalFace, 
+        padding
+      );
+      
+      if (blendFactor > 0.01) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        
+        // Apply lighting enhancement
+        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+        const shadowLift = luminance < 128 ? (128 - luminance) / 128 * 0.2 : 0;
+        const brightnessFactor = 1.0 + shadowLift + 0.05;
+        const contrastFactor = 1.1;
+        const midpoint = 128;
+        
+        const enhancedR = (r - midpoint) * contrastFactor + midpoint * brightnessFactor;
+        const enhancedG = (g - midpoint) * contrastFactor + midpoint * brightnessFactor;
+        const enhancedB = (b - midpoint) * contrastFactor + midpoint * brightnessFactor;
+        
+        // Blend enhanced with original based on distance from face center
+        enhancedData[i] = Math.min(255, Math.max(0, 
+          r * (1 - blendFactor) + enhancedR * blendFactor
+        ));
+        enhancedData[i + 1] = Math.min(255, Math.max(0, 
+          g * (1 - blendFactor) + enhancedG * blendFactor
+        ));
+        enhancedData[i + 2] = Math.min(255, Math.max(0, 
+          b * (1 - blendFactor) + enhancedB * blendFactor
+        ));
+      }
+    }
+    
+    return new ImageData(enhancedData, imageData.width, imageData.height);
+  }
+  
+  // Calculate smooth blend factor based on distance from face center
+  private static calculateBlendFactor(
+    x: number, 
+    y: number, 
+    face: FaceRegion, 
+    padding: number
+  ): number {
+    const faceCenterX = face.x + face.width / 2;
+    const faceCenterY = face.y + face.height / 2;
+    
+    // Distance from face center
+    const dx = x - faceCenterX;
+    const dy = y - faceCenterY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Face radius (use the smaller dimension to ensure we stay within face bounds)
+    const faceRadius = Math.min(face.width, face.height) / 2;
+    const blendRadius = faceRadius + padding;
+    
+    if (distance <= faceRadius) {
+      // Full effect in face center
+      return 1.0;
+    } else if (distance <= blendRadius) {
+      // Smooth falloff from face edge to padding edge
+      const falloffDistance = distance - faceRadius;
+      const falloffRatio = falloffDistance / padding;
+      // Smooth cubic falloff
+      return Math.max(0, 1 - falloffRatio * falloffRatio * falloffRatio);
+    } else {
+      // No effect outside blend radius
+      return 0;
+    }
   }
 }

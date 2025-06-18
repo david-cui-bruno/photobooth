@@ -4,6 +4,7 @@ import { faceDetectionService } from '../../services/faceDetectionService';
 import type { FaceData } from '../../services/faceDetectionService';
 import FaceOverlay from '../FaceOverlay/FaceOverlay';
 import { FaceEnhancementService } from '../../utils/faceEnhancement';
+import { EmotionAutoCaptureService } from '../../utils/emotionAutoCapture';
 
 interface CameraProps {
   stripType: string;
@@ -12,6 +13,8 @@ interface CameraProps {
 }
 
 const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
+  console.log('Camera component rendered with:', { stripType, filters });
+  
   const webcamRef = useRef<Webcam>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null); // For real-time processing
   const animationRef = useRef<number>(0);
@@ -30,6 +33,18 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
   // New state for real-time enhancement
   const [enableRealTimeEnhancement, setEnableRealTimeEnhancement] = useState(false);
 
+  const [autoCapture, setAutoCapture] = useState<EmotionAutoCaptureService>(
+    new EmotionAutoCaptureService({
+      enabled: false,
+      requireAllSmiling: true,
+      smileThreshold: 0.5,
+      confidenceThreshold: 0.5,
+      stabilityFrames: 3
+    })
+  );
+  const [autoCaptureEnabled, setAutoCaptureEnabled] = useState(false);
+  const [readinessScore, setReadinessScore] = useState(0);
+
   const getPanelCount = () => {
     return parseInt(stripType.split(' ')[0]) || 4;
   };
@@ -38,6 +53,9 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
     setIsCountingDown(true);
     setCountdown(3);
     setShowPhotoOptions(false);
+    
+    // Reset auto-capture when manually starting countdown
+    autoCapture.resetCooldown();
 
     const timer = setInterval(() => {
       setCountdown((prev) => {
@@ -59,40 +77,27 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d')!;
     
-    // Set canvas size to match video
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Match canvas size to the displayed video size (not native resolution)
+    canvas.width = video.clientWidth;
+    canvas.height = video.clientHeight;
     
-    // Draw current video frame to canvas
+    // Draw video frame scaled to match display
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    // Apply real-time face enhancement if enabled and faces detected
+    // Apply face enhancement if enabled
     if (enableRealTimeEnhancement && faces.length > 0) {
       const faceRegions = faces.map(face => ({
-        x: face.detection.box.x,
-        y: face.detection.box.y,
-        width: face.detection.box.width,
-        height: face.detection.box.height
+        x: face.detection.box.x * (canvas.width / video.videoWidth),
+        y: face.detection.box.y * (canvas.height / video.videoHeight),
+        width: face.detection.box.width * (canvas.width / video.videoWidth),
+        height: face.detection.box.height * (canvas.height / video.videoHeight)
       }));
       
-      // Apply enhancements
       FaceEnhancementService.enhanceFaceLighting(canvas, faceRegions);
-      FaceEnhancementService.applySkinSmoothing(canvas, faceRegions, 0.3);
+      FaceEnhancementService.applyRealTimeSkinSmoothing(canvas, faceRegions, 0.3);
     }
     
-    // Apply other filters
-    if (filters.length > 0) {
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      
-      for (const filter of filters) {
-        applyPixelFilter(data, filter);
-      }
-      
-      ctx.putImageData(imageData, 0, 0);
-    }
-    
-    // Continue processing next frame
+    // Continue processing
     animationRef.current = requestAnimationFrame(processVideoFrame);
   };
 
@@ -115,6 +120,7 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
 
   // Updated takePhoto to capture from enhanced canvas
   const takePhoto = () => {
+    console.log('📸 takePhoto() called!');
     setIsCountingDown(false);
     
     let imageSrc: string;
@@ -123,71 +129,34 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
     if ((enableRealTimeEnhancement && faces.length > 0) || filters.length > 0) {
       if (canvasRef.current) {
         imageSrc = canvasRef.current.toDataURL('image/jpeg', 0.9);
+        console.log('📸 Captured from canvas');
       } else {
         imageSrc = webcamRef.current?.getScreenshot() || '';
+        console.log('📸 Canvas fallback to webcam');
       }
     } else {
       // Capture directly from webcam
       imageSrc = webcamRef.current?.getScreenshot() || '';
+      console.log('📸 Captured from webcam');
     }
     
     if (imageSrc) {
+      console.log('📸 Image captured successfully, updating state...');
       setCurrentPhotoJustTaken(imageSrc);
       setCapturedImages(prev => [...prev, imageSrc]);
-      setShowPhotoOptions(true);
-    }
-  };
-
-  const applyPixelFilter = (data: Uint8ClampedArray, filter: string) => {
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
       
-      switch (filter) {
-        case 'grayscale':
-          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-          data[i] = gray;
-          data[i + 1] = gray;
-          data[i + 2] = gray;
-          break;
-          
-        case 'sepia':
-          data[i] = Math.min(255, (r * 0.393) + (g * 0.769) + (b * 0.189));
-          data[i + 1] = Math.min(255, (r * 0.349) + (g * 0.686) + (b * 0.168));
-          data[i + 2] = Math.min(255, (r * 0.272) + (g * 0.534) + (b * 0.131));
-          break;
-          
-        case 'vintage':
-          // Sepia + slight brightness + contrast
-          const sepiaR = Math.min(255, (r * 0.393) + (g * 0.769) + (b * 0.189));
-          const sepiaG = Math.min(255, (r * 0.349) + (g * 0.686) + (b * 0.168));
-          const sepiaB = Math.min(255, (r * 0.272) + (g * 0.534) + (b * 0.131));
-          data[i] = Math.min(255, sepiaR * 1.1);
-          data[i + 1] = Math.min(255, sepiaG * 1.1);
-          data[i + 2] = Math.min(255, sepiaB * 1.1);
-          break;
-          
-        case 'warm':
-          data[i] = Math.min(255, r * 1.2); // Increase red
-          data[i + 1] = Math.min(255, g * 1.1); // Slightly increase green
-          data[i + 2] = Math.max(0, b * 0.9); // Decrease blue
-          break;
-          
-        case 'cool':
-          data[i] = Math.max(0, r * 0.9); // Decrease red
-          data[i + 1] = Math.min(255, g * 1.05); // Slightly increase green
-          data[i + 2] = Math.min(255, b * 1.2); // Increase blue
-          break;
-          
-        case 'vivid':
-          // Increase saturation and contrast
-          const avg = (r + g + b) / 3;
-          data[i] = Math.min(255, avg + (r - avg) * 1.5);
-          data[i + 1] = Math.min(255, avg + (g - avg) * 1.5);
-          data[i + 2] = Math.min(255, avg + (b - avg) * 1.5);
-          break;
+      // If auto-capture is enabled, automatically continue (don't show options)
+      if (autoCaptureEnabled && capturedImages.length + 1 < getPanelCount()) {
+        setShowPhotoOptions(false);
+        // Reset auto-capture for next photo
+        setTimeout(() => {
+          autoCapture.resetCooldown();
+        }, 1000); // 1 second pause between auto-captures
+      } else {
+        setShowPhotoOptions(true);
       }
+    } else {
+      console.error('❌ Failed to capture image');
     }
   };
 
@@ -202,13 +171,18 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
     setCurrentPhotoJustTaken('');
     setShowPhotoOptions(false);
     
+    // Only reset when we're actually starting a new photo session
     if (capturedImages.length < getPanelCount()) {
-      startCountdown();
-    } else {
+      console.log('🔄 Starting next photo - resetting auto-capture');
+      autoCapture.resetCooldown();
+    }
+    
+    if (capturedImages.length >= getPanelCount()) {
       if (onComplete) {
         onComplete(capturedImages);
       }
     }
+    // For auto-capture, don't call startCountdown - just wait
   };
 
   const allPhotosComplete = capturedImages.length === getPanelCount();
@@ -233,24 +207,103 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
 
     const detectFaces = async () => {
       if (webcamRef.current?.video && webcamRef.current.video.readyState === 4) {
-        // Check if video is actually playing and has dimensions
         const video = webcamRef.current.video;
         if (video.videoWidth > 0 && video.videoHeight > 0) {
           const detectedFaces = await faceDetectionService.detectFaces(video);
           setFaces(detectedFaces);
+          
+          // Update readiness score
+          const score = autoCapture.getReadinessScore(detectedFaces);
+          setReadinessScore(score);
+          
+          // Debug the conditions
+          const shouldCapture = autoCapture.shouldAutoCapture(detectedFaces);
+          const conditions = {
+            shouldCapture,
+            showPhotoOptions,
+            isCountingDown,
+            capturedCount: capturedImages.length,
+            maxCount: getPanelCount(),
+            belowLimit: capturedImages.length < getPanelCount()
+          };
+          
+          console.log('🔍 Auto-capture conditions:', conditions);
+          
+          // Check for auto-capture - only if we haven't reached the photo limit
+          if (shouldCapture && 
+              !isCountingDown &&
+              capturedImages.length < getPanelCount() &&
+              (!showPhotoOptions || autoCaptureEnabled)) {
+            console.log('📸 CALLING takePhoto()...');
+            
+            // Clear photo options first if they're showing
+            if (showPhotoOptions) {
+              setShowPhotoOptions(false);
+              setCurrentPhotoJustTaken('');
+            }
+            
+            takePhoto();
+          } else if (shouldCapture) {
+            console.log('❌ Auto-capture blocked by conditions:', {
+              showPhotoOptions: showPhotoOptions && !autoCaptureEnabled,
+              isCountingDown,
+              reachedLimit: capturedImages.length >= getPanelCount()
+            });
+          }
         }
       }
     };
 
-    const interval = setInterval(detectFaces, 300); // 3 FPS
+    const interval = setInterval(detectFaces, 200);
     return () => clearInterval(interval);
-  }, [isCountingDown, isModelLoading]); // Add isModelLoading as dependency
+  }, [isCountingDown, isModelLoading, autoCapture, showPhotoOptions, capturedImages.length, getPanelCount()]);
+
+  // Add this useEffect to automatically clear photo options when auto-capture is enabled
+  useEffect(() => {
+    if (autoCaptureEnabled && showPhotoOptions && capturedImages.length < getPanelCount()) {
+      console.log('🤖 Auto-capture enabled: clearing photo options to allow next photo');
+      setShowPhotoOptions(false);
+      setCurrentPhotoJustTaken('');
+      // Reset auto-capture for next photo
+      setTimeout(() => {
+        autoCapture.resetCooldown();
+      }, 500);
+    }
+  }, [autoCaptureEnabled, showPhotoOptions, capturedImages.length, getPanelCount()]);
+
+  const getFilterStyle = () => {
+    const filterMap: { [key: string]: string } = {
+      'grayscale': 'grayscale(100%)',
+      'sepia': 'sepia(100%)',
+      'vintage': 'sepia(50%) contrast(120%) brightness(110%)',
+      'warm': 'brightness(110%) saturate(150%) hue-rotate(15deg)',
+      'cool': 'brightness(110%) saturate(80%) hue-rotate(-15deg)',
+      'vivid': 'saturate(150%) contrast(120%)',
+    };
+
+    const appliedFilters = filters.map(filter => filterMap[filter] || '').filter(Boolean);
+    return appliedFilters.length > 0 ? appliedFilters.join(' ') : 'none';
+  };
+
+  const toggleAutoCapture = () => {
+    const newEnabled = !autoCaptureEnabled;
+    setAutoCaptureEnabled(newEnabled);
+    autoCapture.updateConfig({ enabled: newEnabled });
+    if (!newEnabled) {
+      autoCapture.resetCooldown();
+    }
+  };
 
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-bold mb-4">
         Take Your Photos ({capturedImages.length}/{getPanelCount()})
       </h2>
+      
+      {/* Add debug info */}
+      <div className="text-sm text-gray-600">
+        Strip Type: {stripType}, Filters: {filters.join(', ') || 'None'}
+      </div>
       
       {/* Face Enhancement Controls */}
       <div className="bg-purple-50 p-3 rounded-lg">
@@ -325,34 +378,18 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
         </div>
       )}
       
-      <div className="relative">
-        {/* Original webcam - hidden when processing is active */}
+      <div className="relative inline-block">
         <Webcam
           ref={webcamRef}
           audio={false}
           screenshotFormat="image/jpeg"
-          className={`w-full rounded-lg max-w-md mx-auto ${
-            (enableRealTimeEnhancement && faces.length > 0) || filters.length > 0 
-              ? 'hidden' 
-              : ''
-          }`}
-        />
-        
-        {/* Enhanced canvas - shown when processing is active */}
-        <canvas
-          ref={canvasRef}
-          className={`w-full rounded-lg max-w-md mx-auto ${
-            (enableRealTimeEnhancement && faces.length > 0) || filters.length > 0 
-              ? '' 
-              : 'hidden'
-          }`}
-          style={{
-            maxWidth: '28rem', // Match webcam max-width
-            height: 'auto'
+          className="w-full rounded-lg max-w-md mx-auto block"
+          style={{ 
+            filter: !enableRealTimeEnhancement ? getFilterStyle() : 'none'
           }}
         />
         
-        {/* Face overlay - position over whichever is visible */}
+        {/* Face overlay - positioned absolutely within the relative container */}
         {showFaceOverlay && faces.length > 0 && webcamRef.current?.video && (
           <FaceOverlay
             faces={faces}
@@ -362,8 +399,25 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
           />
         )}
         
+        {/* Canvas overlay for real-time processing - positioned over video */}
+        {enableRealTimeEnhancement && faces.length > 0 && (
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full rounded-lg max-w-md mx-auto pointer-events-none"
+            style={{
+              maxWidth: '28rem',
+              height: 'auto',
+              top: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1
+            }}
+          />
+        )}
+        
+        {/* Countdown overlay */}
         {isCountingDown && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 rounded-lg">
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 rounded-lg" style={{ zIndex: 3 }}>
             <div className="text-center">
               <span className="text-6xl font-bold text-white">{countdown}</span>
               <p className="text-white mt-2 text-xl">
@@ -403,7 +457,7 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
               onClick={nextPhoto}
               className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
             >
-              {allPhotosComplete ? 'Next' : 'Next Photo'}
+              {capturedImages.length >= getPanelCount() ? 'Finish & Continue' : 'Next Photo'}
             </button>
           </>
         )}
@@ -448,6 +502,53 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
           </div>
         </div>
       )}
+
+      {/* Auto-Capture Controls */}
+      <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+        <div className="flex items-center justify-between mb-3">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={autoCaptureEnabled}
+              onChange={toggleAutoCapture}
+              className="rounded"
+            />
+            <span className="font-medium text-yellow-800">
+              🎯 Smart Auto-Capture
+            </span>
+          </label>
+          
+          {autoCaptureEnabled && (
+            <div className="text-sm text-yellow-700">
+              Readiness: {Math.round(readinessScore)}%
+            </div>
+          )}
+        </div>
+        
+        {autoCaptureEnabled && (
+          <div className="space-y-2">
+            <div className="w-full bg-yellow-200 rounded-full h-2">
+              <div 
+                className="bg-yellow-500 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${readinessScore}%` }}
+              ></div>
+            </div>
+            
+            <div className="text-sm text-yellow-700">
+              {readinessScore > 70 ?     // Lowered from 80
+                "😊 Perfect! Get ready..." : 
+                readinessScore > 40 ?    // Lowered from 50
+                  "😐 Almost there - smile more!" : 
+                  "😕 Need better lighting or bigger smiles"
+              }
+            </div>
+            
+            <div className="text-xs text-yellow-600">
+              Photos will be taken automatically when everyone is smiling and looking good!
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

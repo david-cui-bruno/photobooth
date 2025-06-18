@@ -3,6 +3,8 @@ import StripSelector from './StripSelector';
 import FilterSelector from './FilterSelector';
 import Camera from './Camera';
 import FrameSelector from './FrameSelector';
+import InfoModal from '../Common/InfoModal';
+import { sharePhotoStrip } from '../../utils/sharing';
 
 const PhotoBooth = () => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -10,6 +12,7 @@ const PhotoBooth = () => {
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [selectedFrame, setSelectedFrame] = useState('');
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  const [showInfo, setShowInfo] = useState(false);
 
   const handleNext = () => {
     if (currentStep < 4) {
@@ -136,6 +139,7 @@ const PhotoBooth = () => {
           </div>
         </div>
       </div>
+      <InfoModal isOpen={showInfo} onClose={() => setShowInfo(false)} />
     </div>
   );
 };
