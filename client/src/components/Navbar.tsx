@@ -15,6 +15,9 @@ const Navbar = () => {
             <Link to="/editor" className="text-gray-600 hover:text-gray-900">
               Photo Editor
             </Link>
+            <Link to="/bulletin" className="text-gray-600 hover:text-gray-900">
+              Bulletin Board
+            </Link>
           </div>
         </div>
       </div>

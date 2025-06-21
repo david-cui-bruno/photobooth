@@ -1,11 +1,13 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
-import PhotoBooth from './components/PhotoBooth/PhotoBooth.tsx';
+import PhotoBooth from './components/PhotoBooth/Photobooth.tsx';
 import PhotoEditor from './components/PhotoEditor/PhotoEditor.tsx';
 import Navbar from './components/Navbar.tsx';
 import LoadingSpinner from './components/Common/LoadingSpinner';
+import { BulletinBoard } from './components/Bulletin/BulletinBoard';
+import { AdminPanel } from './components/Admin/AdminPanel';
 
-const PhotoBoothLazy = lazy(() => import('./components/PhotoBooth/PhotoBooth.tsx'));
+const PhotoBoothLazy = lazy(() => import('./components/PhotoBooth/Photobooth.tsx'));
 const PhotoEditorLazy = lazy(() => import('./components/PhotoEditor/PhotoEditor.tsx'));
 
 function App() {
@@ -25,8 +27,12 @@ function App() {
                 <PhotoEditorLazy />
               </Suspense>
             } />
+            <Route path="/bulletin" element={<BulletinBoard />} />
           </Routes>
         </main>
+        
+        {/* Admin Panel - Available on all pages */}
+        <AdminPanel />
       </div>
     </Router>
   );

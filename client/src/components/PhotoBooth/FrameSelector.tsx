@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { generatePhotoStrip } from '../../utils/stripGenerator';
+import { ShareModal } from './ShareModal';
 
 // Import Chikawa images
 import chikawa1 from '../../assets/ChiikawaFrame/chikawa1.png';
@@ -17,6 +18,7 @@ const FrameSelector = ({ onSelect, images = [], stripType = '4 Panel', filters: 
   const [finalStrip, setFinalStrip] = useState<string>('');
   const [selectedFrame, setSelectedFrame] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const frames = [
     { 
@@ -75,6 +77,12 @@ const FrameSelector = ({ onSelect, images = [], stripType = '4 Panel', filters: 
     }
   };
 
+  const handleShare = () => {
+    if (finalStrip && selectedFrame) {
+      setShowShareModal(true);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-bold mb-4">Select Frame & Download</h2>
@@ -102,12 +110,18 @@ const FrameSelector = ({ onSelect, images = [], stripType = '4 Panel', filters: 
               className="mx-auto rounded-lg shadow-lg max-w-xs"
             />
           </div>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
             <button
               onClick={downloadStrip}
-              className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-lg font-semibold mr-4"
+              className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-lg font-semibold"
             >
               📥 Download Photo Strip
+            </button>
+            <button
+              onClick={handleShare}
+              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-lg font-semibold"
+            >
+              📤 Share to Bulletin Board
             </button>
           </div>
         </div>
@@ -143,6 +157,18 @@ const FrameSelector = ({ onSelect, images = [], stripType = '4 Panel', filters: 
           </button>
         ))}
       </div>
+
+      {showShareModal && (
+        <ShareModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          photoStripData={{
+            imageData: finalStrip,
+            stripType: stripType as '2-panel' | '4-panel' | '6-panel',
+            frameType: selectedFrame
+          }}
+        />
+      )}
     </div>
   );
 };
