@@ -300,20 +300,31 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
     }
   };
 
+  const getCameraConstraints = () => {
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    return {
+      width: isMobile ? { ideal: 1280, max: 1920 } : { ideal: 1920 },
+      height: isMobile ? { ideal: 720, max: 1080 } : { ideal: 1080 },
+      facingMode: isMobile ? { ideal: "user" } : "user"
+    };
+  };
+
   return (
-    <div className="space-y-4">
-      <h2 className="text-2xl font-bold mb-4">
+    <div className="space-y-4 px-2 sm:px-0">
+      {/* Responsive heading */}
+      <h2 className="text-xl sm:text-2xl font-bold mb-4 text-center">
         Take Your Photos ({capturedImages.length}/{getPanelCount()})
       </h2>
       
-      {/* Add debug info */}
-      <div className="text-sm text-gray-600">
+      {/* Debug info - hide on mobile */}
+      <div className="hidden sm:block text-sm text-gray-600 text-center">
         Strip Type: {stripType}, Filters: {filters.join(', ') || 'None'}
       </div>
       
-      {/* Face Enhancement Controls */}
+      {/* Face Enhancement Controls - stack on mobile */}
       <div className="bg-purple-50 p-3 rounded-lg">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -321,12 +332,12 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
               onChange={(e) => setEnableRealTimeEnhancement(e.target.checked)}
               className="rounded"
             />
-            <span className="text-purple-800 font-medium">
+            <span className="text-purple-800 font-medium text-sm sm:text-base">
               Real-time Face Enhancement
             </span>
           </label>
           {enableRealTimeEnhancement && (
-            <span className="text-purple-600 text-sm">
+            <span className="text-purple-600 text-xs sm:text-sm">
               ✨ Live skin smoothing & lighting enhancement
             </span>
           )}
@@ -384,12 +395,14 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
         </div>
       )}
       
-      <div className="relative inline-block">
+      {/* Camera container - responsive sizing */}
+      <div className="relative inline-block w-full max-w-sm sm:max-w-md lg:max-w-lg mx-auto">
         <Webcam
           ref={webcamRef}
           audio={false}
           screenshotFormat="image/jpeg"
-          className="w-full rounded-lg max-w-md mx-auto block"
+          className="w-full rounded-lg"
+          videoConstraints={getCameraConstraints()}
           style={{ 
             filter: !enableRealTimeEnhancement ? getFilterStyle() : 'none'
           }}
@@ -421,12 +434,12 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
           />
         )}
         
-        {/* Countdown overlay */}
+        {/* Countdown overlay - responsive text */}
         {isCountingDown && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-70 rounded-lg" style={{ zIndex: 3 }}>
             <div className="text-center">
-              <span className="text-6xl font-bold text-white">{countdown}</span>
-              <p className="text-white mt-2 text-xl">
+              <span className="text-4xl sm:text-6xl font-bold text-white">{countdown}</span>
+              <p className="text-white mt-2 text-sm sm:text-xl">
                 Photo {capturedImages.length + 1} of {getPanelCount()}
               </p>
             </div>
@@ -441,13 +454,14 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
         </div>
       )}
 
-      <div className="flex justify-center space-x-4">
+      {/* Control buttons - responsive layout */}
+      <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4">
         {capturedImages.length === 0 && !isCountingDown && !showPhotoOptions && (
           <button
             onClick={startCountdown}
-            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-lg"
+            className="w-full sm:w-auto px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-base sm:text-lg font-semibold touch-manipulation"
           >
-            Start Photoshoot
+            📸 Start Photoshoot
           </button>
         )}
 
@@ -455,26 +469,17 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
           <>
             <button
               onClick={retakePhoto}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+              className="w-full sm:w-auto px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 touch-manipulation"
             >
-              Retake
+              🔄 Retake
             </button>
             <button
               onClick={nextPhoto}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+              className="w-full sm:w-auto px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 touch-manipulation"
             >
-              {capturedImages.length >= getPanelCount() ? 'Finish & Continue' : 'Next Photo'}
+              {capturedImages.length >= getPanelCount() ? '✅ Finish & Continue' : '➡️ Next Photo'}
             </button>
           </>
-        )}
-
-        {capturedImages.length > 0 && capturedImages.length < getPanelCount() && !isCountingDown && !showPhotoOptions && (
-          <button
-            onClick={startCountdown}
-            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-lg"
-          >
-            Take Photo {capturedImages.length + 1}
-          </button>
         )}
       </div>
 
@@ -489,18 +494,21 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
         </div>
       )}
 
+      {/* Photo preview - responsive grid */}
       {capturedImages.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-lg font-semibold mb-2">All Photos ({capturedImages.length}/{getPanelCount()}):</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <h3 className="text-base sm:text-lg font-semibold mb-2 text-center">
+            All Photos ({capturedImages.length}/{getPanelCount()}):
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
             {capturedImages.map((image, index) => (
               <div key={index} className="relative">
                 <img
                   src={image}
                   alt={`Photo ${index + 1}`}
-                  className="w-full rounded border"
+                  className="w-full h-20 sm:h-24 object-cover rounded border-2 border-blue-300"
                 />
-                <span className="absolute top-1 left-1 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+                <span className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-1 rounded">
                   {index + 1}
                 </span>
               </div>
@@ -509,6 +517,7 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
         </div>
       )}
 
+      {/* Continue button for completed photos */}
       {capturedImages.length >= getPanelCount() && (
         <div className="text-center mt-6">
           <div className="bg-green-50 p-4 rounded-lg mb-4">
@@ -523,7 +532,7 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
                 onComplete(capturedImages);
               }
             }}
-            className="px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-lg font-semibold"
+            className="w-full sm:w-auto px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-lg font-semibold touch-manipulation"
           >
             ✅ Continue to Frame Selection
           </button>
