@@ -89,12 +89,20 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, photoSt
       setFinalPhotoStrip(finalImage);
 
       const title = formData.description || 'Photo Strip';
+      
+      // Clean the data - don't pass undefined values
       const submitData = {
         title,
-        description: formData.description || undefined,
-        author: formData.names || undefined,
-        ...photoStripData,
-        imageData: finalImage
+        imageData: finalImage,
+        stripType: photoStripData.stripType,
+        frameType: photoStripData.frameType,
+        // Only include optional fields if they have values
+        ...(formData.description && formData.description.trim() && { 
+          description: formData.description.trim() 
+        }),
+        ...(formData.names && formData.names.trim() && { 
+          author: formData.names.trim() 
+        })
       };
 
       console.log('📤 Submitting to Firebase:', {

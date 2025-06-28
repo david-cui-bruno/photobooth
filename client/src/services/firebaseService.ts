@@ -53,17 +53,29 @@ import {
       try {
         console.log('🔄 Creating photo strip in Firebase...');
         
-        const docRef = await addDoc(collection(db, 'photostrips'), {
+        // Filter out undefined values - Firebase doesn't accept them
+        const cleanData: any = {
           title: data.title,
-          description: data.description,
           imageData: data.imageData,
           stripType: data.stripType,
           frameType: data.frameType,
-          author: data.author,
           tags: data.tags || [],
           createdAt: Timestamp.now(),
           likes: 0
-        });
+        };
+
+        // Only add optional fields if they have actual values
+        if (data.description && data.description.trim() !== '') {
+          cleanData.description = data.description;
+        }
+        
+        if (data.author && data.author.trim() !== '') {
+          cleanData.author = data.author;
+        }
+
+        console.log('📤 Clean data for Firebase:', cleanData);
+        
+        const docRef = await addDoc(collection(db, 'photostrips'), cleanData);
 
         console.log('✅ Photo strip created with ID:', docRef.id);
 
