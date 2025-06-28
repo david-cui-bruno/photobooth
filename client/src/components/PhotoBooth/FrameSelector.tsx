@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { generatePhotoStrip } from '../../utils/stripGenerator';
 import { ShareModal } from './ShareModal';
-import firebaseService from '../../services/firebaseService';
+import { firebaseService } from '../../services/firebaseService';
 
 // Import Chikawa images
 import chikawa1 from '../../assets/ChiikawaFrame/chikawa1.png';

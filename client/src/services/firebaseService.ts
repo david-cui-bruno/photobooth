@@ -25,6 +25,22 @@ import {
   }
   
   class FirebaseService {
+    async testConnection(): Promise<boolean> {
+      try {
+        console.log('🧪 Testing Firebase connection...');
+        
+        // Try to read from the collection (doesn't require write permissions)
+        const q = query(collection(db, 'photostrips'));
+        const snapshot = await getDocs(q);
+        
+        console.log('✅ Firebase read test successful, found', snapshot.size, 'documents');
+        return true;
+      } catch (error) {
+        console.error('❌ Firebase connection test failed:', error);
+        return false;
+      }
+    }
+
     async createPhotoStrip(data: {
       title: string;
       description?: string;
@@ -35,6 +51,8 @@ import {
       tags?: string[];
     }): Promise<PhotoStrip> {
       try {
+        console.log('🔄 Creating photo strip in Firebase...');
+        
         const docRef = await addDoc(collection(db, 'photostrips'), {
           title: data.title,
           description: data.description,
@@ -46,6 +64,8 @@ import {
           createdAt: Timestamp.now(),
           likes: 0
         });
+
+        console.log('✅ Photo strip created with ID:', docRef.id);
 
         return {
           id: docRef.id,
@@ -60,7 +80,7 @@ import {
           likes: 0
         };
       } catch (error) {
-        console.error('Error creating photo strip:', error);
+        console.error('❌ Error creating photo strip:', error);
         throw new Error('Failed to create photo strip');
       }
     }
@@ -128,22 +148,6 @@ import {
       } catch (error) {
         console.error('Error deleting all photo strips:', error);
         throw new Error('Failed to delete all photo strips');
-      }
-    }
-  
-    async testConnection(): Promise<boolean> {
-      try {
-        console.log('🧪 Testing Firebase connection...');
-        
-        // Try to read from the collection (doesn't require write permissions)
-        const q = query(collection(db, 'photostrips'));
-        const snapshot = await getDocs(q);
-        
-        console.log('✅ Firebase read test successful, found', snapshot.size, 'documents');
-        return true;
-      } catch (error) {
-        console.error('❌ Firebase connection test failed:', error);
-        return false;
       }
     }
   }
