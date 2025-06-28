@@ -142,16 +142,21 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
     
     if (imageSrc) {
       console.log('📸 Image captured successfully, updating state...');
+      const newImages = [...capturedImages, imageSrc];
       setCurrentPhotoJustTaken(imageSrc);
-      setCapturedImages(prev => [...prev, imageSrc]);
+      setCapturedImages(newImages);
       
-      // If auto-capture is enabled, automatically continue (don't show options)
-      if (autoCaptureEnabled && capturedImages.length + 1 < getPanelCount()) {
+      console.log(`📸 Photos: ${newImages.length}/${getPanelCount()}`);
+      
+      // Check if we're done after adding this photo
+      if (newImages.length >= getPanelCount()) {
+        console.log('🎉 All photos captured! Will call onComplete in nextPhoto');
+        setShowPhotoOptions(true);
+      } else if (autoCaptureEnabled) {
         setShowPhotoOptions(false);
-        // Reset auto-capture for next photo
         setTimeout(() => {
           autoCapture.resetCooldown();
-        }, 1000); // 1 second pause between auto-captures
+        }, 1000);
       } else {
         setShowPhotoOptions(true);
       }
@@ -171,18 +176,21 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
     setCurrentPhotoJustTaken('');
     setShowPhotoOptions(false);
     
-    // Only reset when we're actually starting a new photo session
-    if (capturedImages.length < getPanelCount()) {
-      console.log('🔄 Starting next photo - resetting auto-capture');
-      autoCapture.resetCooldown();
-    }
+    // Check if we have enough photos after the current one
+    const totalPhotos = capturedImages.length;
+    const requiredPhotos = getPanelCount();
     
-    if (capturedImages.length >= getPanelCount()) {
+    console.log(`📸 NextPhoto: ${totalPhotos}/${requiredPhotos} photos taken`);
+    
+    if (totalPhotos >= requiredPhotos) {
+      console.log('✅ All photos complete! Calling onComplete...');
       if (onComplete) {
         onComplete(capturedImages);
       }
+    } else {
+      console.log('🔄 More photos needed, resetting for next photo');
+      autoCapture.resetCooldown();
     }
-    // For auto-capture, don't call startCountdown - just wait
   };
 
   useEffect(() => {
@@ -498,6 +506,27 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {capturedImages.length >= getPanelCount() && (
+        <div className="text-center mt-6">
+          <div className="bg-green-50 p-4 rounded-lg mb-4">
+            <p className="text-green-800 font-semibold">
+              🎉 All {getPanelCount()} photos captured!
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              console.log('🎯 Manual continue clicked');
+              if (onComplete) {
+                onComplete(capturedImages);
+              }
+            }}
+            className="px-8 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-lg font-semibold"
+          >
+            ✅ Continue to Frame Selection
+          </button>
         </div>
       )}
 

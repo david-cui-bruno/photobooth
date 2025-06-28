@@ -26,7 +26,13 @@ const PhotoBooth = () => {
   };
 
   const handleImagesComplete = (images: string[]) => {
+    console.log('📸 Images complete received:', images.length);
     setCapturedImages(images);
+    
+    // Automatically advance to frame selection step
+    setTimeout(() => {
+      setCurrentStep(4);
+    }, 500);
   };
 
   const handleCreateNewStrip = () => {
