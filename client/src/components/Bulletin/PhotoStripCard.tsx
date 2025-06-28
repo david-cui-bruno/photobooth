@@ -7,14 +7,6 @@ interface PhotoStripCardProps {
 }
 
 export const PhotoStripCard: React.FC<PhotoStripCardProps> = ({ photoStrip, onLike }) => {
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300">
       {/* Full-length Photo Strip - No Footer */}

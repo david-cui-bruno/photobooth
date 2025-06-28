@@ -1,7 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
-import PhotoBooth from './components/PhotoBooth/Photobooth.tsx';
-import PhotoEditor from './components/PhotoEditor/PhotoEditor.tsx';
 import Navbar from './components/Navbar.tsx';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import { BulletinBoard } from './components/Bulletin/BulletinBoard';

@@ -4,7 +4,6 @@ import FilterSelector from './FilterSelector';
 import Camera from './Camera';
 import FrameSelector from './FrameSelector';
 import InfoModal from '../Common/InfoModal';
-import { sharePhotoStrip } from '../../utils/sharing';
 
 const PhotoBooth = () => {
   const [currentStep, setCurrentStep] = useState(1);

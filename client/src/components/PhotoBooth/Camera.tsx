@@ -33,7 +33,7 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
   // New state for real-time enhancement
   const [enableRealTimeEnhancement, setEnableRealTimeEnhancement] = useState(false);
 
-  const [autoCapture, setAutoCapture] = useState<EmotionAutoCaptureService>(
+  const [autoCapture] = useState<EmotionAutoCaptureService>(
     new EmotionAutoCaptureService({
       enabled: false,
       requireAllSmiling: true,
@@ -184,8 +184,6 @@ const Camera = ({ stripType, filters, onComplete }: CameraProps) => {
     }
     // For auto-capture, don't call startCountdown - just wait
   };
-
-  const allPhotosComplete = capturedImages.length === getPanelCount();
 
   useEffect(() => {
     const loadModels = async () => {
