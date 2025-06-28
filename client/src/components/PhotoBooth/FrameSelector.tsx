@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { generatePhotoStrip } from '../../utils/stripGenerator';
 import { ShareModal } from './ShareModal';
+import firebaseService from '../../services/firebaseService';
 
 // Import Chikawa images
 import chikawa1 from '../../assets/ChiikawaFrame/chikawa1.png';
@@ -83,6 +84,21 @@ const FrameSelector = ({ onSelect, images = [], stripType = '4 Panel', filters: 
     }
   };
 
+  const testFirebase = async () => {
+    console.log('🧪 Testing Firebase connection...');
+    try {
+      const success = await firebaseService.testConnection();
+      if (success) {
+        alert('✅ Firebase connection successful!');
+      } else {
+        alert('❌ Firebase connection failed - check console for details');
+      }
+    } catch (error) {
+      console.error('Test error:', error);
+      alert('❌ Firebase test error - check console');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-bold mb-4">Select Frame & Download</h2>
@@ -126,6 +142,15 @@ const FrameSelector = ({ onSelect, images = [], stripType = '4 Panel', filters: 
           </div>
         </div>
       )}
+      
+      <div className="mb-4">
+        <button
+          onClick={testFirebase}
+          className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+        >
+          🧪 Test Firebase Connection
+        </button>
+      </div>
       
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {frames.map((frame) => (

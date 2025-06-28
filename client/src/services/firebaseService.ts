@@ -130,6 +130,22 @@ import {
         throw new Error('Failed to delete all photo strips');
       }
     }
+  
+    async testConnection(): Promise<boolean> {
+      try {
+        console.log('🧪 Testing Firebase connection...');
+        
+        // Try to read from the collection (doesn't require write permissions)
+        const q = query(collection(db, 'photostrips'));
+        const snapshot = await getDocs(q);
+        
+        console.log('✅ Firebase read test successful, found', snapshot.size, 'documents');
+        return true;
+      } catch (error) {
+        console.error('❌ Firebase connection test failed:', error);
+        return false;
+      }
+    }
   }
   
   export const firebaseService = new FirebaseService();

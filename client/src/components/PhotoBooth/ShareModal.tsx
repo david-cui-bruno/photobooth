@@ -70,24 +70,41 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, photoSt
     setLoading(true);
 
     try {
+      console.log('🔄 Starting photo strip submission...');
+      console.log('📊 Photo strip data:', {
+        stripType: photoStripData.stripType,
+        frameType: photoStripData.frameType,
+        imageDataLength: photoStripData.imageData.length,
+        description: formData.description,
+        names: formData.names
+      });
+
       const finalImage = await addTextToPhotoStrip(
         photoStripData.imageData, 
         formData.description, 
         formData.names
       );
       
+      console.log('✅ Text added to photo strip');
       setFinalPhotoStrip(finalImage);
 
       const title = formData.description || 'Photo Strip';
-
-      await firebaseService.createPhotoStrip({
+      const submitData = {
         title,
         description: formData.description || undefined,
         author: formData.names || undefined,
         ...photoStripData,
         imageData: finalImage
+      };
+
+      console.log('📤 Submitting to Firebase:', {
+        ...submitData,
+        imageData: `[${finalImage.length} chars]` // Don't log full image data
       });
 
+      await firebaseService.createPhotoStrip(submitData);
+
+      console.log('🎉 Successfully created photo strip!');
       setSuccess(true);
       setTimeout(() => {
         onClose();
@@ -96,8 +113,21 @@ export const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, photoSt
         setFinalPhotoStrip('');
       }, 3000);
     } catch (error) {
-      console.error('Failed to share photo strip:', error);
-      alert('Failed to share photo strip. Please try again.');
+      console.error('❌ Failed to share photo strip:', error);
+      
+      // More detailed error logging
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+      }
+      
+      // Check if it's a Firebase-specific error
+      if (error && typeof error === 'object' && 'code' in error) {
+        console.error('Firebase error code:', (error as any).code);
+        console.error('Firebase error message:', (error as any).message);
+      }
+      
+      alert(`Failed to share photo strip: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
